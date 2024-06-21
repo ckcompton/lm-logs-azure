@@ -1,6 +1,12 @@
 # lm-logs-azure(beta)
 
-Azure integration for sending logs to LogicMonitor.
+https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/ckcompton/master/arm-template-deployment/deployRGParent.json
+
+https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fckcompton%2Fmaster%2Farm-template-deployment%2FdeployRGParent.json
+
+
+#Azure integration for sending logs to LogicMonitor.
+
 It's implemented as [Azure Function](https://azure.microsoft.com/en-us/services/functions/) consuming logs from an [Event Hub](https://azure.microsoft.com/en-us/services/event-hubs/), and forwarding them to LogicMonitor log ingestion REST API.
 
 ## Prerequisites
