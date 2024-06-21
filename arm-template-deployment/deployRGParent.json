@@ -18,10 +18,25 @@
       "type": "String"
     },
     "LM_Access_Id": {
-      "type": "String"
+      "type": "String",
+      "defaultValue":"",
+      "metadata": {
+        "description": "LogicMonitor API Token access ID."
+      }
     },
     "LM_Access_Key": {
-      "type": "String"
+      "type": "String",
+      "defaultValue":"",
+      "metadata": {
+        "description": "LogicMonitor API Token access Key."
+      }
+    },
+    "LM_Bearer_Token": {
+      "type": "String",
+      "defaultValue":"",
+      "metadata": {
+        "description": "LM API Bearer Token.\nEither specify access_id and access_key both or bearer_token. If all specified, LMv1 token(access_id and access_key) will be used for authentication with LogicMonitor."
+      }
     },
     "Azure_Client_Id": {
       "type": "string",
@@ -29,12 +44,32 @@
         "description": "Application Client Id provided during the creation of azure account in LM"
       }
     },
+    "Azure_Account_Name": {
+      "type": "string",
+      "defaultValue":"",
+      "metadata": {
+        "description": "Azure Account Name created during the creation of azure account in LM"
+      }
+    },
     "Include_Metadata_keys": {
       "type": "string",
       "defaultValue":"resourceId",
-      "allowedValues": ["resourceId"],
       "metadata": {
         "description": "comma separated keys to add as event metadata in a lm-log event. for nested json specify '.' eg - properties.functionName,properties.message "
+      }
+    },
+    "LMTenantId": {
+      "type": "string",
+      "defaultValue":"",
+      "metadata": {
+        "description": "LogicMonitor Tenant Identifier sent as event metadata to LogicMonitor"
+      }
+    },
+    "Resource_Type": {
+      "type": "string",
+      "defaultValue": "Azure",
+      "metadata": {
+        "description": "Type of platform from where logs are coming."
       }
     },
     "enableActivityLogs": {
@@ -51,6 +86,7 @@
   },
   "resources": [
     {
+      "condition": "[or(and(not(empty(parameters('LM_Access_Id'))), not(empty(parameters('LM_Access_Key')))), not(empty(parameters('LM_Bearer_Token'))))]",
       "type": "Microsoft.Resources/resourceGroups",
       "apiVersion": "2018-05-01",
       "location": "[parameters('resource_group_region')]",
@@ -82,14 +118,26 @@
           "LM_Access_Key": {
             "value": "[parameters('LM_Access_Key')]"
           },
+          "LM_Bearer_Token": {
+            "value": "[parameters('LM_Bearer_Token')]"
+          },
           "Azure_Client_Id": {
             "value": "[parameters('Azure_Client_Id')]"
+          },
+          "Azure_Account_Name": {
+            "value": "[parameters('Azure_Account_Name')]"
           },
           "sourceCodeBranch": {
             "value": "[variables('sourceCodeBranch')]"
           },
           "Include_Metadata_keys": {
             "value": "[parameters('Include_Metadata_keys')]"
+          },
+          "LMTenantId" : {
+            "value": "[parameters('LMTenantId')]"
+          },
+          "Resource_Type": {
+            "value": "[parameters('Resource_Type')]"
           }
         }
       },

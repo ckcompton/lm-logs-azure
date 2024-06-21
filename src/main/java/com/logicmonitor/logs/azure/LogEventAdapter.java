@@ -14,7 +14,14 @@
 
 package com.logicmonitor.logs.azure;
 
+import static com.logicmonitor.logs.azure.LoggingUtils.log;
+import static com.logicmonitor.logs.azure.JsonParsingUtils.parseJsonSafely;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonSyntaxException;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.ReadContext;
@@ -24,11 +31,13 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -36,10 +45,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
 
 /**
@@ -64,6 +71,10 @@ public class LogEventAdapter implements Function<String, List<LogEntry>> {
      */
     public static final String LM_CLIENT_ID = "system.azure.clientid";
     /**
+     * Name of the Azure Client Id used to match the resources for activity logs.
+     */
+    public static final String LM_AZURE_ACCOUNT = "system.displayname";
+    /**
      * Used to match the category of resource for activity logs.
      */
     public static final String LM_CLOUD_CATEGORY_KEY = "system.cloud.category";
@@ -75,9 +86,10 @@ public class LogEventAdapter implements Function<String, List<LogEntry>> {
     /**
      * Categories of Azure activity logs generated
      */
-    public static final Set<String> AUDIT_LOG_CATEGORIES = Set.of("administrative", "serviceHealth", "resourcehealth", "alert", "autoscale", "security", "policy", "recommendation");
+    public static final Set<String> AUDIT_LOG_CATEGORIES = Set.of("administrative", "serviceHealth",
+        "resourcehealth", "alert", "autoscale", "security", "policy", "recommendation");
 
-    public static final String LM_SEVERITY = "severity";
+    public static final String LM_SEVERITY = "log_level";
     public static final String LM_ACTIVITY_TYPE = "activity_type";
     public static final String LM_AZURE_RESOURCE_ID = "azure_resource_id";
     public static final String LM_CATEGORY = "category";
@@ -88,6 +100,10 @@ public class LogEventAdapter implements Function<String, List<LogEntry>> {
     public static final String AZURE_ACTIVITY_TYPE = "operationName";
     public static final String AZURE_RESOURCE_ID = "resourceId";
     public static final String AZURE_CATEGORY = "category";
+    public static final String LM_TENANT_ID = "LM_TENANT_ID";
+
+    public static final String RESOURCE_TYPE_KEY = "RESOURCE_TYPE";
+    public static final String LM_TENANT_ID_KEY = "_lm.tenantId";
 
     public static final Pattern RESOURCE_TYPE = Pattern.compile("/subscriptions/.*/resourceGroups/.*/providers/(?<type>[^/]*/[^/]*)/.*", Pattern.CASE_INSENSITIVE);
     /**
@@ -120,17 +136,20 @@ public class LogEventAdapter implements Function<String, List<LogEntry>> {
 
     private final String azureClientId;
 
+    private final String azureAccountName;
+
     private final Set<String> metadataDeepPath;
 
-    public LogEventAdapter(String regexScrub, String azureClientId, String includeMetadataKeys) throws PatternSyntaxException {
+    public LogEventAdapter(String regexScrub, String azureClientId, String azureAccountName, String includeMetadataKeys) throws PatternSyntaxException {
         if (regexScrub != null) {
             scrubPattern = Pattern.compile(regexScrub);
         } else {
             scrubPattern = null;
         }
         this.azureClientId = azureClientId;
+        this.azureAccountName = azureAccountName;
         this.metadataDeepPath = StringUtils.isNotBlank(includeMetadataKeys) ? Arrays.stream(
-                StringUtils.split(StringUtils.strip(includeMetadataKeys), ","))
+                StringUtils.split(includeMetadataKeys, ",")).map(StringUtils::strip)
             .collect(Collectors.toSet()) : new HashSet<>();
     }
 
@@ -151,18 +170,23 @@ public class LogEventAdapter implements Function<String, List<LogEntry>> {
      */
     @Override
     public List<LogEntry> apply(String jsonString) {
-        JsonObject log = GSON.fromJson(jsonString, JsonObject.class);
-        // if the JSON object contains "records" array, transform its members
-        return Optional.ofNullable(log.get(AZURE_RECORDS_PROPERTY))
-            .filter(JsonElement::isJsonArray)
-            .map(JsonElement::getAsJsonArray)
-            .map(records -> StreamSupport.stream(records.spliterator(), true)
-                .filter(JsonElement::isJsonObject)
-                .map(JsonElement::getAsJsonObject)
-            )
-            .orElseGet(() -> Stream.of(log))
-            .map(this::createEntry)
-            .collect(Collectors.toList());
+        List<LogEntry> validLogEntries = new ArrayList<>();
+        try {
+            JsonObject log = (JsonObject) GSON.fromJson(parseJsonSafely(jsonString), JsonObject.class);
+            Optional.ofNullable(log.get(AZURE_RECORDS_PROPERTY))
+                .filter(JsonElement::isJsonArray)
+                .map(JsonElement::getAsJsonArray)
+                .map(records -> StreamSupport.stream(records.spliterator(), true)
+                    .filter(JsonElement::isJsonObject)
+                    .map(JsonElement::getAsJsonObject)
+                )
+                .orElseGet(() -> Stream.of(log))
+                .map(this::createEntry)
+                .forEach(validLogEntries::add);
+        } catch (JsonSyntaxException e) {
+            log(Level.INFO, "Error while processing Json and applying log transformation: " + e.getMessage());
+        }
+        return validLogEntries;
     }
 
     /**
@@ -172,9 +196,14 @@ public class LogEventAdapter implements Function<String, List<LogEntry>> {
      * @return log entry
      */
     protected LogEntry createEntry(JsonObject json) {
-        LogEventMessage event = GSON.fromJson(json, LogEventMessage.class);
+        LogEventMessage event = GSON.fromJson(parseJsonSafely(json.toString()), LogEventMessage.class);
         LogEntry entry = new LogEntry();
-        if ((event.getCategory() != null) && (AUDIT_LOG_CATEGORIES.contains(event.getCategory().toLowerCase()))) {
+        if ((azureAccountName != null && StringUtils.isNotBlank(azureAccountName)) && (event.getCategory() != null) && (AUDIT_LOG_CATEGORIES.contains(event.getCategory().toLowerCase()))) {
+            //client ID and Azure account for activity logs
+            entry.putLmResourceIdItem(LM_CLIENT_ID, azureClientId);
+            entry.putLmResourceIdItem(LM_CLOUD_CATEGORY_KEY, LM_CLOUD_CATEGORY_VALUE);
+            entry.putLmResourceIdItem(LM_AZURE_ACCOUNT, azureAccountName);
+        } else if ((event.getCategory() != null) && (AUDIT_LOG_CATEGORIES.contains(event.getCategory().toLowerCase()))) {
             //client ID for activity logs
             entry.putLmResourceIdItem(LM_CLIENT_ID, azureClientId);
             entry.putLmResourceIdItem(LM_CLOUD_CATEGORY_KEY, LM_CLOUD_CATEGORY_VALUE);
@@ -186,10 +215,10 @@ public class LogEventAdapter implements Function<String, List<LogEntry>> {
         // timestamp as epoch
         try {
             Optional.ofNullable(event.getTime())
-                    .map(Instant::parse)
-                    .map(Instant::getEpochSecond)
-                    .ifPresent(entry::setTimestamp);
-        } catch(Exception e){
+                .map(Instant::parse)
+                .map(Instant::getEpochSecond)
+                .ifPresent(entry::setTimestamp);
+        } catch (Exception e) {
             entry.setTimestamp(System.currentTimeMillis());
         }
 
@@ -215,7 +244,20 @@ public class LogEventAdapter implements Function<String, List<LogEntry>> {
         // Add static metadata
         metadata.putAll(REQ_STATIC_METADATA);
         // Add metadata for includeMetadataKeys
-        metadata.putAll(addMissingMetadataFromJsonEvent(json));
+        if (!metadataDeepPath.isEmpty()) {
+            metadata.putAll(addMissingMetadataFromJsonEvent(json));
+        }
+
+        String tenantId = System.getenv(LM_TENANT_ID);
+        if (StringUtils.isNotBlank(tenantId)) {
+            metadata.put(LM_TENANT_ID_KEY, tenantId);
+        }
+
+        String resourceType = System.getenv(RESOURCE_TYPE_KEY);
+        if(StringUtils.isNotBlank(resourceType)){
+            metadata.put(RESOURCE_TYPE_KEY.toLowerCase(), resourceType);
+        }
+
         entry.setMetadata(metadata);
         if (scrubPattern != null) {
             message = scrubPattern.matcher(message).replaceAll("");

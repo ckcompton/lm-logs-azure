@@ -11,16 +11,28 @@
     "LM_Access_Key": {
       "type": "string"
     },
+    "LM_Bearer_Token": {
+      "type": "String"
+    },
     "Azure_Client_Id": {
       "type": "string"
     },
+    "Azure_Account_Name": {
+      "type": "string"
+    },
     "Include_Metadata_keys": {
+      "type": "string"
+    },
+    "LMTenantId": {
       "type": "string"
     },
     "azure_region": {
       "type": "string"
     },
     "sourceCodeBranch": {
+      "type": "string"
+    },
+    "Resource_Type": {
       "type": "string"
     }
   },
@@ -33,7 +45,8 @@
     "ConsumergroupsLogsName": "LMConsumerGroup",
     "functionServerfarms": "[concat(variables('eventhubNamespace'),'-service-plan')]",
     "listener": "listener",
-    "sender": "sender"
+    "sender": "sender",
+    "lm_auth": "[concat('{ \"LM_ACCESS_ID\" : \"',parameters('LM_Access_Id'),'\", \"LM_ACCESS_KEY\" : \"', parameters('LM_Access_Key'), '\", \"LM_BEARER_TOKEN\" : \"', parameters('LM_Bearer_Token'), '\" }')]"
   },
   "resources": [
     {
@@ -61,6 +74,7 @@
       "apiVersion": "2019-06-01",
       "location": "[resourceGroup().location]",
       "properties": {
+        "minimumTlsVersion": "TLS1_2",
         "encryption": {
           "services": {
             "file": {
@@ -149,16 +163,20 @@
               "value": "[parameters('LM_Company_name')]"
             },
             {
-              "name": "LM_ACCESS_ID",
-              "value": "[parameters('LM_Access_Id')]"
+              "name" : "LM_AUTH",
+              "value" : "[variables('lm_auth')]"
             },
             {
-              "name": "LM_ACCESS_KEY",
-              "value": "[parameters('LM_Access_Key')]"
+              "name" : "LM_TENANT_ID",
+              "value" : "[parameters('LMTenantId')]"
             },
             {
               "name": "AzureClientID",
               "value": "[parameters('Azure_Client_Id')]"
+            },
+            {
+              "name": "AzureAccountName",
+              "value": "[parameters('Azure_Account_Name')]"
             },
             {
               "name": "LogApiClientConnectTimeout",
@@ -187,6 +205,10 @@
             {
               "name": "LOG_LEVEL",
               "value" : "WARNING"
+            },
+            {
+              "name": "RESOURCE_TYPE",
+              "value": "[Parameters('Resource_Type')]"
             }
           ]
         }
