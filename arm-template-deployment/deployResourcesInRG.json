@@ -148,7 +148,7 @@
             },
             {
               "name": "WEBSITE_RUN_FROM_PACKAGE",
-              "value": "[concat('https://github.com/logicmonitor/lm-logs-azure/raw/',parameters('sourceCodeBranch'),'/package/lm-logs-azure.zip')]"
+              "value": "[concat('https://github.com/ckcompton/lm-logs-azure/raw/',parameters('sourceCodeBranch'),'/package/lm-logs-azure.zip')]"
             },
             {
               "name": "AzureWebJobsStorage",
