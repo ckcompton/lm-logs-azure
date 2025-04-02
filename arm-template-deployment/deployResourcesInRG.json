@@ -43,13 +43,13 @@
     }
   },
   "variables": {
-    "logsFunctionAppName": "ADC-LM-TEST-FNA2",
-    "eventhubNamespace": "ADC-LM-TEST-EH2",
-    "storage": "adclmteststg2",
+    "logsFunctionAppName": "ADC-LM-TEST-FNA3",
+    "eventhubNamespace": "ADC-LM-TEST-EH3",
+    "storage": "adclmteststg3",
     "lmAppStorageAccounts": "[if(greater(length(variables('storage')) , 24), substring(variables('storage'), sub(length(variables('storage')) , 24), 24) , variables('storage'))]",
     "eventhubLogsName": "log-hub",
     "ConsumergroupsLogsName": "LMConsumerGroup",
-    "functionServerfarms": "ADC-LM-TEST-ASP2",
+    "functionServerfarms": "ADC-LM-TEST-ASP3",
     "listener": "listener",
     "sender": "sender",
     "lm_auth": "[concat('{ \"LM_ACCESS_ID\" : \"',parameters('LM_Access_Id'),'\", \"LM_ACCESS_KEY\" : \"', parameters('LM_Access_Key'), '\", \"LM_BEARER_TOKEN\" : \"', parameters('LM_Bearer_Token'), '\" }')]",
